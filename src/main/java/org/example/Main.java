@@ -30,6 +30,11 @@ public class Main extends SimpleApplication {
     private boolean forward, backward, left, right;
     private final float moveForce = 15f;
 
+    private final float maxSpeed = 10f;      // m/s
+    private final float accelTime = 3f;      // 3 másodperc
+    private final float acceleration = maxSpeed / accelTime;
+
+
     public static void main(String[] args) {
         Main app = new Main();
 
@@ -164,23 +169,65 @@ public class Main extends SimpleApplication {
         }
     };
 
-    // ===================== GAME LOOP =====================
+    private boolean isOnGround() {
+        Vector3f origin = playerGeom.getWorldTranslation();
+        Vector3f direction = new Vector3f(0, -1, 0);
+
+        com.jme3.bullet.collision.PhysicsRayTestResult result =
+                physics.getPhysicsSpace()
+                        .rayTest(origin, origin.add(direction.mult(0.6f)))
+                        .stream()
+                        .findFirst()
+                        .orElse(null);
+
+        return result != null;
+    }
+
+
+    private float approach(float current, float target, float delta) {
+        if (current < target) {
+            current += delta;
+            if (current > target) current = target;
+        } else if (current > target) {
+            current -= delta;
+            if (current < target) current = target;
+        }
+        return current;
+    }
+
+
     @Override
     public void simpleUpdate(float tpf) {
-        Vector3f force = new Vector3f();
-        if (forward) force.z -= moveForce;
-        if (backward) force.z += moveForce;
-        if (left) force.x -= moveForce;
-        if (right) force.x += moveForce;
 
-        playerPhysics.applyCentralForce(force);
+        Vector3f vel = playerPhysics.getLinearVelocity();
+        Vector3f targetVel = new Vector3f();
 
+        if (forward)  targetVel.z -= maxSpeed;
+        if (backward) targetVel.z += maxSpeed;
+        if (left)     targetVel.x -= maxSpeed;
+        if (right)    targetVel.x += maxSpeed;
+
+        // Ha nincs input, lassuljon le
+        if (!forward && !backward) targetVel.z = 0;
+        if (!left && !right)       targetVel.x = 0;
+
+        // Gyorsulás a target sebesség felé
+        Vector3f newVel = new Vector3f();
+
+        newVel.x = approach(vel.x, targetVel.x, acceleration * tpf);
+        newVel.z = approach(vel.z, targetVel.z, acceleration * tpf);
+        newVel.y = vel.y; // a gravitációt nem bántjuk
+
+        playerPhysics.setLinearVelocity(newVel);
+
+        // Kamera követés
         Vector3f pos = playerGeom.getWorldTranslation();
         cam.setLocation(pos.add(0, 8, 8));
         cam.lookAt(pos, Vector3f.UNIT_Y);
 
         if (pos.y < -10) respawn();
     }
+
 
     // ===================== RESPAWN =====================
     private void respawn() {
@@ -192,7 +239,7 @@ public class Main extends SimpleApplication {
 
     // ===================== JUMP =====================
     private void jump() {
-        if (Math.abs(playerPhysics.getLinearVelocity().y) < 0.1f) {
+        if (isOnGround()) {
             playerPhysics.applyImpulse(new Vector3f(0, 5f, 0), Vector3f.ZERO);
         }
     }
