@@ -14,15 +14,12 @@ import com.jme3.math.FastMath;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.queue.RenderQueue;
 import com.jme3.scene.Geometry;
+import com.jme3.scene.VertexBuffer;
 import com.jme3.scene.shape.Box;
 import com.jme3.scene.shape.Quad;
 import com.jme3.texture.Texture;
 import com.jme3.texture.Texture.WrapMode;
-
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.InputStream;
+import com.jme3.system.AppSettings;
 
 public class Main extends SimpleApplication {
 
@@ -34,7 +31,16 @@ public class Main extends SimpleApplication {
     private final float moveForce = 15f;
 
     public static void main(String[] args) {
-        new Main().start();
+        Main app = new Main();
+
+        AppSettings settings = new AppSettings(true);
+        settings.setResolution(1600, 900);
+        settings.setTitle("Engine Demo");
+        settings.setVSync(true);
+
+        app.setSettings(settings);
+        app.setShowSettings(false);
+        app.start();
     }
 
     @Override
@@ -58,36 +64,35 @@ public class Main extends SimpleApplication {
 
     // ===================== TALAJ =====================
     private void initGround() {
-        BufferedImage image = null;
-        try (InputStream is = getClass().getResourceAsStream("/assets/Textures/background.png")) {
-            if (is == null) throw new RuntimeException("Nem található a kép!");
-            image = ImageIO.read(is);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        if (image == null) return;
+        float groundSize = 500f;
 
-        float imgWidth = image.getWidth();
-        float imgHeight = image.getHeight();
-        float scale = 0.01f;
+        Quad quad = new Quad(groundSize, groundSize);
 
-        float groundWidth = imgWidth * scale;
-        float groundDepth = imgHeight * scale;
+        // UV ismétlés
+        quad.setBuffer(
+                VertexBuffer.Type.TexCoord,
+                2,
+                new float[]{
+                        0, 0,
+                        50, 0,
+                        50, 50,
+                        0, 50
+                }
+        );
 
-        Quad groundQuad = new Quad(groundWidth, groundDepth);
-        Geometry ground = new Geometry("Ground", groundQuad);
+        Geometry ground = new Geometry("Ground", quad);
 
         Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
         Texture tex = assetManager.loadTexture("Textures/background.png");
-        tex.setWrap(WrapMode.Clamp);
+        tex.setWrap(WrapMode.Repeat);
         mat.setTexture("ColorMap", tex);
 
         ground.setMaterial(mat);
         ground.setShadowMode(RenderQueue.ShadowMode.Receive);
 
-        // XZ síkba forgatás
+        // XZ síkra forgatás
         ground.rotate(-FastMath.HALF_PI, 0, 0);
-        ground.setLocalTranslation(-groundWidth / 2f, 0, groundDepth / 2f);
+        ground.setLocalTranslation(-groundSize / 2f, 0, groundSize / 2f);
 
         rootNode.attachChild(ground);
 
@@ -98,12 +103,8 @@ public class Main extends SimpleApplication {
 
     // ===================== KARAKTER =====================
     private void initPlayer() {
-        // Box állítva: Y a magasság
-        Box box = new Box(0.25f, 0.5f, 0.25f); // 0.5 m magas
+        Box box = new Box(0.25f, 0.5f, 0.25f);
         playerGeom = new Geometry("Player", box);
-
-        // Forgatás, hogy ne “feküdjön”
-        playerGeom.rotate(0, 0, 0); // ha már jó a méret, nem kell
 
         Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
         mat.setBoolean("UseMaterialColors", true);
@@ -117,6 +118,8 @@ public class Main extends SimpleApplication {
         playerPhysics = new RigidBodyControl(1f);
         playerGeom.addControl(playerPhysics);
         physics.getPhysicsSpace().add(playerPhysics);
+
+        playerPhysics.setPhysicsLocation(new Vector3f(0, 1f, 0));
     }
 
     // ===================== FÉNY =====================
@@ -143,8 +146,11 @@ public class Main extends SimpleApplication {
         inputManager.addMapping("Backward", new KeyTrigger(KeyInput.KEY_S));
         inputManager.addMapping("Left", new KeyTrigger(KeyInput.KEY_A));
         inputManager.addMapping("Right", new KeyTrigger(KeyInput.KEY_D));
+        inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
+        inputManager.addMapping("Respawn", new KeyTrigger(KeyInput.KEY_R));
 
-        inputManager.addListener(actionListener, "Forward", "Backward", "Left", "Right");
+        inputManager.addListener(actionListener,
+                "Forward", "Backward", "Left", "Right", "Jump", "Respawn");
     }
 
     private final ActionListener actionListener = (name, isPressed, tpf) -> {
@@ -153,6 +159,8 @@ public class Main extends SimpleApplication {
             case "Backward" -> backward = isPressed;
             case "Left" -> left = isPressed;
             case "Right" -> right = isPressed;
+            case "Jump" -> { if (isPressed) jump(); }
+            case "Respawn" -> { if (isPressed) respawn(); }
         }
     };
 
@@ -174,9 +182,18 @@ public class Main extends SimpleApplication {
         if (pos.y < -10) respawn();
     }
 
+    // ===================== RESPAWN =====================
     private void respawn() {
-        playerPhysics.setPhysicsLocation(new Vector3f(0, 2, 0));
+        playerPhysics.setPhysicsLocation(new Vector3f(0, 1f, 0));
         playerPhysics.setLinearVelocity(Vector3f.ZERO);
         playerPhysics.setAngularVelocity(Vector3f.ZERO);
+        playerPhysics.setPhysicsRotation(new com.jme3.math.Quaternion());
+    }
+
+    // ===================== JUMP =====================
+    private void jump() {
+        if (Math.abs(playerPhysics.getLinearVelocity().y) < 0.1f) {
+            playerPhysics.applyImpulse(new Vector3f(0, 5f, 0), Vector3f.ZERO);
+        }
     }
 }
