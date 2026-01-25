@@ -19,7 +19,6 @@ public class PlayerView {
         mat.setBoolean("UseMaterialColors", true);
         mat.setColor("Diffuse", ColorRGBA.Blue);
         mat.setColor("Specular", ColorRGBA.White);
-        mat.setFloat("Shininess", 16f);
 
         geom.setMaterial(mat);
         geom.setShadowMode(RenderQueue.ShadowMode.Cast);

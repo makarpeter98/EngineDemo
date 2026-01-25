@@ -2,29 +2,28 @@ package org.example.App;
 
 import com.jme3.app.SimpleApplication;
 import com.jme3.bullet.BulletAppState;
-import com.jme3.bullet.collision.shapes.BoxCollisionShape;
-import com.jme3.bullet.control.RigidBodyControl;
-import com.jme3.input.KeyInput;
-import com.jme3.input.controls.KeyTrigger;
-import com.jme3.math.Vector3f;
 import com.jme3.system.AppSettings;
+import org.example.Controller.CarController;
 import org.example.Controller.InputController;
-import org.example.Controller.PlayerController;
-import org.example.Model.PlayerModel;
+import org.example.Controller.CameraController;
+import org.example.Model.CarModel;
+import org.example.Model.WorldModel;
+import org.example.View.CameraView;
+import org.example.View.CarView;
 import org.example.View.GroundView;
-import org.example.View.PlayerView;
+import org.example.View.LightningView;
 
 public class GameApp extends SimpleApplication {
 
     private BulletAppState physics;
-    private PlayerController playerController;
-    private PlayerView playerView;
+    private CarController carController;
+    private CameraController cameraController;
 
     public static void main(String[] args) {
         GameApp app = new GameApp();
 
         AppSettings settings = new AppSettings(true);
-        settings.setResolution(1600, 900);
+        settings.setResolution(1200, 800);
         settings.setTitle("Engine Demo");
         settings.setVSync(true);
 
@@ -35,89 +34,39 @@ public class GameApp extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-
         flyCam.setEnabled(false);
 
+        // Fizikai világ
         physics = new BulletAppState();
         stateManager.attach(physics);
 
-        // MODEL
-        PlayerModel model = new PlayerModel();
+        cameraController = new CameraController(cam, inputManager);
 
-        // VIEW
-        playerView = new PlayerView(assetManager);
-        GroundView groundView = new GroundView(assetManager);
+        // MODELS
+        CarModel carModel = new CarModel();
+        WorldModel worldModel = new WorldModel();
 
-        rootNode.attachChild(playerView.geom);
+        // VIEWS
+        CarView carView = new CarView(assetManager);
+        GroundView groundView = new GroundView(assetManager, worldModel);
+        groundView.initPhysics(physics);
+        LightningView lightningView = new LightningView(rootNode);
+
+        rootNode.attachChild(carView.model);
         rootNode.attachChild(groundView.geom);
 
-        initLights();
+        // CONTROLLERS
+        carController = new CarController(carModel, carView);
+        carController.initPhysics(physics);
 
-        // ===================== PHYSICS =====================
-
-        // PLAYER PHYSICS
-        RigidBodyControl playerPhy = new RigidBodyControl(1f);
-        playerView.geom.addControl(playerPhy);
-
-        // Gravity
-        playerPhy.setGravity(new Vector3f(0, -20f, 0));
-
-        // Angular factor: engedi X/Z dőlést mindig, nem csak leesésnél
-        playerPhy.setAngularFactor(new Vector3f(1,0,1)); // X/Z dőlés engedélyezve
-        playerPhy.setLinearDamping(0.1f);               // X/Z csillapítás
-        playerPhy.setAngularDamping(0.5f);              // forgás csillapítás
-
-
-        physics.getPhysicsSpace().add(playerPhy);
-        playerPhy.setPhysicsLocation(model.spawnPosition.clone());
-
-
-
-        // GROUND PHYSICS (STABLE!)
-        BoxCollisionShape groundShape =
-                new BoxCollisionShape(new Vector3f(250f, 0.1f, 250f));
-
-        RigidBodyControl groundPhy = new RigidBodyControl(groundShape, 0);
-        groundPhy.setPhysicsLocation(new Vector3f(0, 0, 0));
-
-        physics.getPhysicsSpace().add(groundPhy);
-
-
-        // ===================== CONTROLLER =====================
-        playerController = new PlayerController(model, playerPhy, playerView);
-
-        // ===================== INPUT =====================
-        InputController input = new InputController(playerController);
-
-        inputManager.addMapping("Forward", new KeyTrigger(KeyInput.KEY_W));
-        inputManager.addMapping("Backward", new KeyTrigger(KeyInput.KEY_S));
-        inputManager.addMapping("Left", new KeyTrigger(KeyInput.KEY_A));
-        inputManager.addMapping("Right", new KeyTrigger(KeyInput.KEY_D));
-        inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
-        inputManager.addMapping("Reset", new KeyTrigger(KeyInput.KEY_R));
-
-        inputManager.addListener(input, "Forward", "Backward", "Left", "Right", "Jump", "Reset");
+        // INPUT
+        InputController input = new InputController(carController);
+        input.register(inputManager);
     }
 
     @Override
     public void simpleUpdate(float tpf) {
-        playerController.update(tpf);
-
-        Vector3f pos = playerView.geom.getWorldTranslation();
-        cam.setLocation(pos.add(0, 8, 8));
-        cam.lookAt(pos, Vector3f.UNIT_Y);
+        carController.update(tpf);
+        cameraController.follow(carController.getPosition());
     }
-
-    private void initLights() {
-        var sun = new com.jme3.light.DirectionalLight();
-        sun.setDirection(new Vector3f(-1, -2, -1).normalizeLocal());
-        sun.setColor(com.jme3.math.ColorRGBA.White);
-        rootNode.addLight(sun);
-
-        var amb = new com.jme3.light.AmbientLight();
-        amb.setColor(com.jme3.math.ColorRGBA.White.mult(0.3f));
-        rootNode.addLight(amb);
-    }
-
-
 }
